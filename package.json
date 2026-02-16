@@ -1,0 +1,22 @@
+{
+  "name": "solana-kiss-cli",
+  "version": "0.0.1",
+  "bin": {
+    "solana-kiss": "./dist/main.js"
+  },
+  "scripts": {
+    "build": "tsup"
+  },
+  "dependencies": {
+    "solana-kiss": "^0.2.10",
+    "yargs": "^18.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "@types/yargs": "^17.0.35",
+    "prettier": "^3.5.3",
+    "prettier-plugin-organize-imports": "^4.3.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.4.0"
+  }
+}
