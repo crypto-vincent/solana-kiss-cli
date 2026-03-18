@@ -4,6 +4,7 @@ import {
   ErrorStack,
   IdlProgram,
   JsonValue,
+  Result,
   Solana,
   casingLosslessConvertToCamel,
   casingLosslessConvertToSnake,
@@ -14,7 +15,7 @@ import {
 import { fileURLToPath } from "url";
 
 export async function utilsResolveProgramIdl(params: {
-  idlUrlOrPath: string | undefined;
+  idlUrlOrPath: URL | undefined;
   solanaRpcUrl: string | undefined;
   programAddress: string | undefined;
 }): Promise<IdlProgram> {
@@ -40,32 +41,45 @@ export async function utilsResolveProgramIdl(params: {
 export async function utilsResolveUrlJson(
   urlOrPath: string,
 ): Promise<JsonValue> {
-  try {
-    let url = new URL(urlOrPath);
-    if (url.protocol === "http:" || url.protocol === "https:") {
-      const res = await fetch(url);
+  const url = utilsTrySync(urlOrPath, (str) => new URL(str));
+  const urlValue = url.value;
+  if (urlValue) {
+    if (urlValue.protocol === "http:" || urlValue.protocol === "https:") {
+      const res = await fetch(urlValue);
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status} while fetching ${url.toString()}`);
+        throw new Error(
+          `HTTP ${res.status} while fetching ${urlValue.toString()}`,
+        );
       }
       return await res.json();
     }
-    if (url.protocol === "file:") {
-      return JSON.parse(await fsp.readFile(fileURLToPath(url), "utf8"));
+    if (urlValue.protocol === "file:") {
+      return JSON.parse(await fsp.readFile(fileURLToPath(urlValue), "utf8"));
     }
-    utilsThrowWithOptions(`Unsupported URL protocol: ${url.protocol}`, [
+    utilsThrowWithOptions(`Unsupported URL protocol: ${urlValue.protocol}`, [
       "http",
       "https",
       "file",
     ]);
-  } catch (errorByUrl) {
-    try {
-      return JSON.parse(await fsp.readFile(resolve(urlOrPath), "utf8"));
-    } catch (errorByPath) {
-      throw new ErrorStack(`Could not resolve URL: ${urlOrPath}`, [
-        errorByUrl,
-        errorByPath,
-      ]);
-    }
+  }
+  try {
+    return JSON.parse(await fsp.readFile(resolve(urlOrPath), "utf8"));
+  } catch (errorByPath) {
+    throw new ErrorStack(`Could not resolve URL: ${urlOrPath}`, [
+      url.error,
+      errorByPath,
+    ]);
+  }
+}
+
+function utilsTrySync<Input, Output>(
+  input: Input,
+  fn: (input: Input) => Output,
+): Result<Output> {
+  try {
+    return { value: fn(input) };
+  } catch (error) {
+    return { error };
   }
 }
 
