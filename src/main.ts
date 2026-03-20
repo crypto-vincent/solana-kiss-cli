@@ -1,12 +1,13 @@
 import {
-  argumentOptional,
-  argumentRequired,
   command,
   commandWithSubcommands,
-  execution,
+  operation,
   optionRepeatable,
   optionSingleValue,
-  runAndExit,
+  positionalOptional,
+  positionalRequired,
+  positionalVariadics,
+  runAsCliAndExit,
   Type,
   typeString,
 } from "cli-kiss";
@@ -16,29 +17,47 @@ import {
   pubkeyFromBase58,
   rpcHttpFindProgramOwnedAccounts,
   Solana,
-  UrlOrMoniker,
   urlRpcFromUrlOrMoniker,
 } from "solana-kiss";
+
+type CommandContext = {
+  rpcUrl: URL;
+  idlUrlsOrPaths: string[];
+};
 
 const typePubkey: Type<Pubkey> = {
   label: "PUBKEY(BASE58)",
   decoder: (value) => pubkeyFromBase58(value),
 };
 
-const typeRpcUrlOrMoniker: Type<UrlOrMoniker> = {
+const typeRpcUrlOrMoniker: Type<URL> = {
   label: "RPC_URL_OR_MONIKER",
-  decoder: (value) => urlRpcFromUrlOrMoniker(new URL(value)),
+  decoder: (value) => urlRpcFromUrlOrMoniker(value),
 };
 
-const commandDebug = command<null, void>(
-  { description: "debug description" },
-  execution(
+const commandDebug = command<CommandContext, void>(
+  {
+    description: "debug description",
+    details: "debug details",
+  },
+  operation(
     {
       options: {},
-      arguments: [
-        argumentRequired({
+      positionals: [
+        positionalRequired({
           label: "DADA",
-          description: "lol",
+          description: "required positional",
+          type: typeString,
+        }),
+        positionalOptional({
+          label: "DODO",
+          description: "optional positional",
+          type: typeString,
+          default: () => "default value for DODO",
+        }),
+        positionalVariadics({
+          label: "DUDU",
+          description: "variadic positionals",
           type: typeString,
         }),
       ],
@@ -50,13 +69,25 @@ const commandDebug = command<null, void>(
   ),
 );
 
-const commandAccount = command<null, void>(
-  { description: "Inspect a Solana account" },
-  execution(
+const commandAccount = command<CommandContext, void>(
+  {
+    description: "Inspect a Solana account",
+    details:
+      "Fetches and decodes the account data for a given Solana account address. The account data is decoded using the IDL files provided via the --idl option at the root level, allowing for human-readable output of account fields based on known account types.",
+  },
+  operation(
     {
-      options: {},
-      arguments: [
-        argumentRequired({
+      options: {
+        dudu: optionRepeatable({
+          short: "d",
+          long: "dudu",
+          label: "DUDU",
+          description: "lol",
+          type: typeString,
+        }),
+      },
+      positionals: [
+        positionalRequired({
           description: "Base58 address of the account to inspect",
           label: "ACCOUNT-ADDRESS",
           type: typePubkey,
@@ -66,27 +97,27 @@ const commandAccount = command<null, void>(
     async (_context, inputs) => {
       const solana = new Solana("devnet"); // TODO - better loaders and local config for RPC URL
       const accountInfo = await solana.getAndInferAndDecodeAccount(
-        inputs.arguments[0],
+        inputs.positionals[0],
       );
       console.log(accountInfo);
     },
   ),
 );
 
-const commandFind = command<null, void>(
+const commandFind = command<CommandContext, void>(
   {
     description: "Find accounts by program and optionally by account type name",
   },
-  execution(
+  operation(
     {
       options: {},
-      arguments: [
-        argumentRequired({
+      positionals: [
+        positionalRequired({
           type: typePubkey,
           description: "Base58 address of the program",
           label: "PROGRAM",
         }),
-        argumentOptional({
+        positionalOptional({
           label: "NAME",
           description: "Name of the account type to filter by",
           type: typeString,
@@ -96,8 +127,8 @@ const commandFind = command<null, void>(
     },
     async (_context, inputs) => {
       const solana = new Solana("mainnet"); // TODO - better loaders and local config for RPC URL
-      const program = inputs.arguments[0];
-      const name = inputs.arguments[1];
+      const program = inputs.positionals[0];
+      const name = inputs.positionals[1];
       if (name === null) {
         const ownedAccounts = await rpcHttpFindProgramOwnedAccounts(
           solana.getRpcHttp(),
@@ -124,7 +155,7 @@ const commandFind = command<null, void>(
   ),
 );
 
-const commandRoot = commandWithSubcommands<null, null, void>(
+const commandRoot = commandWithSubcommands<null, CommandContext, void>(
   {
     description: "A CLI for Solana account inspection and manipulation",
     details: [
@@ -132,7 +163,7 @@ const commandRoot = commandWithSubcommands<null, null, void>(
       "Use the subcommands to perform different actions. For example, use `account` to inspect a specific account, or `find` to search for accounts owned by a program.",
     ].join(" "),
   },
-  execution(
+  operation(
     {
       options: {
         rpc: optionSingleValue({
@@ -144,17 +175,20 @@ const commandRoot = commandWithSubcommands<null, null, void>(
           type: typeRpcUrlOrMoniker,
         }),
         idl: optionRepeatable({
+          short: "i",
           long: "idl",
           label: "IDL_URL_OR_PATH",
-          description:
-            "URL or file path to an IDL JSON file. Can be specified multiple times to load multiple IDLs.",
+          description: "URL or file path to an IDL JSON file.",
           type: typeString,
         }),
       },
-      arguments: [],
+      positionals: [],
     },
-    async (_context, _inputs) => {
-      return null;
+    async (_context, inputs) => {
+      return {
+        rpcUrl: inputs.options.rpc,
+        idlUrlsOrPaths: inputs.options.idl,
+      };
     },
   ),
   {
@@ -164,6 +198,6 @@ const commandRoot = commandWithSubcommands<null, null, void>(
   },
 );
 
-runAndExit("solana-kiss", process.argv.slice(2), null, commandRoot, {
+runAsCliAndExit("solana-kiss", process.argv.slice(2), null, commandRoot, {
   buildVersion: process.env["npm_package_version"] as string,
 });

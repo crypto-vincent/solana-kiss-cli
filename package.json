@@ -12,8 +12,8 @@
     "typescript": "^5.4.0"
   },
   "dependencies": {
-    "cli-kiss": "0.0.10",
-    "solana-kiss": "0.2.18"
+    "cli-kiss": "0.1.3",
+    "solana-kiss": "0.2.20"
   },
   "scripts": {
     "format": "prettier --write src",
